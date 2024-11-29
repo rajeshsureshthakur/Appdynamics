@@ -1,0 +1,104 @@
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.util.Base64;
+
+public class LocalAPIClient {
+    // Replace these values with your actual API endpoints and credentials
+    private static final String FIRST_API_URL = "http://your-first-api-endpoint.com/api";
+    private static final String SECOND_API_URL = "http://your-second-api-endpoint.com/api";
+    private static final String USER_ID = "your-username";
+    private static final String PASSWORD = "your-password";
+
+    public static void main(String[] args) {
+        try {
+            // Make first API call
+            String firstResponse = makeFirstAPICall();
+            System.out.println("First API Response: " + firstResponse);
+            
+            // Extract ID from first response using simple string manipulation
+            // Assuming response is like: {"id": "FkxilkQ109="}
+            String id = extractIdFromResponse(firstResponse);
+            System.out.println("Extracted ID: " + id);
+
+            // Make second API call using the ID
+            String secondResponse = makeSecondAPICall(id);
+            System.out.println("Second API Response: " + secondResponse);
+
+        } catch (Exception e) {
+            System.out.println("Error occurred: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    private static String extractIdFromResponse(String response) {
+        // Simple string parsing (no external JSON library needed)
+        int startIndex = response.indexOf("\"id\":") + 6;
+        int endIndex = response.indexOf("\"", startIndex + 2);
+        return response.substring(startIndex, endIndex).trim();
+    }
+
+    private static String makeFirstAPICall() throws Exception {
+        URL url = new URL(FIRST_API_URL);
+        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+        
+        // Set up basic authentication
+        String auth = USER_ID + ":" + PASSWORD;
+        String encodedAuth = Base64.getEncoder().encodeToString(auth.getBytes());
+        conn.setRequestProperty("Authorization", "Basic " + encodedAuth);
+
+        // Configure connection
+        conn.setRequestMethod("POST");
+        conn.setRequestProperty("Content-Type", "application/json");
+        conn.setDoOutput(true);
+
+        // Add your request payload here if needed
+        String jsonInputString = "{}";  // Modify as per your API requirements
+        
+        try(OutputStream os = conn.getOutputStream()) {
+            byte[] input = jsonInputString.getBytes("utf-8");
+            os.write(input, 0, input.length);
+        }
+
+        return readResponse(conn);
+    }
+
+    private static String makeSecondAPICall(String id) throws Exception {
+        URL url = new URL(SECOND_API_URL);
+        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+        
+        // Set up basic authentication
+        String auth = USER_ID + ":" + PASSWORD;
+        String encodedAuth = Base64.getEncoder().encodeToString(auth.getBytes());
+        conn.setRequestProperty("Authorization", "Basic " + encodedAuth);
+
+        // Configure connection
+        conn.setRequestMethod("POST");
+        conn.setRequestProperty("Content-Type", "application/json");
+        conn.setDoOutput(true);
+
+        // Create request payload with ID
+        String jsonInputString = "{\"id\": \"" + id + "\"}";
+        
+        try(OutputStream os = conn.getOutputStream()) {
+            byte[] input = jsonInputString.getBytes("utf-8");
+            os.write(input, 0, input.length);
+        }
+
+        return readResponse(conn);
+    }
+
+    private static String readResponse(HttpURLConnection conn) throws Exception {
+        StringBuilder response = new StringBuilder();
+        try(BufferedReader br = new BufferedReader(
+            new InputStreamReader(conn.getInputStream(), "utf-8"))) {
+            String responseLine;
+            while ((responseLine = br.readLine()) != null) {
+                response.append(responseLine.trim());
+            }
+        }
+        return response.toString();
+    }
+}
