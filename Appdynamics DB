@@ -1,0 +1,125 @@
+import java.io.*;
+import java.util.*;
+
+public class CSVMerger {
+    static class NodeKey {
+        String nodeName;
+        String dbServerName;
+        
+        NodeKey(String nodeName, String dbServerName) {
+            this.nodeName = nodeName;
+            this.dbServerName = dbServerName;
+        }
+        
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            NodeKey that = (NodeKey) o;
+            return Objects.equals(nodeName, that.nodeName) && 
+                   Objects.equals(dbServerName, that.dbServerName);
+        }
+        
+        @Override
+        public int hashCode() {
+            return Objects.hash(nodeName, dbServerName);
+        }
+    }
+    
+    public static void main(String[] args) {
+        String[] inputFiles = {
+            "file1.csv",
+            "file2.csv",
+            "file3.csv",
+            "file4.csv"
+        };
+        String outputFile = "merged_output.csv";
+        
+        try {
+            mergeFiles(inputFiles, outputFile);
+            System.out.println("Files merged successfully! Check " + outputFile);
+        } catch (Exception e) {
+            System.err.println("Error merging files: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+    
+    public static void mergeFiles(String[] inputFiles, String outputFile) throws IOException {
+        // Map to store all values: Key is NodeKey (node name + DB server), Value is array of metric values
+        Map<NodeKey, String[]> mergedData = new TreeMap<>((k1, k2) -> {
+            int nameCompare = k1.nodeName.compareTo(k2.nodeName);
+            if (nameCompare != 0) return nameCompare;
+            return k1.dbServerName.compareTo(k2.dbServerName);
+        });
+        
+        // Read each input file
+        for (int fileIndex = 0; fileIndex < inputFiles.length; fileIndex++) {
+            try (BufferedReader br = new BufferedReader(new FileReader(inputFiles[fileIndex]))) {
+                String line = br.readLine(); // Skip header
+                
+                while ((line = br.readLine()) != null) {
+                    String[] parts = splitCSVLine(line);
+                    if (parts.length >= 3) {
+                        String nodeName = parts[0].trim();
+                        String dbServerName = parts[1].trim();
+                        String metricValue = parts[2].trim();
+                        
+                        NodeKey key = new NodeKey(nodeName, dbServerName);
+                        String[] values = mergedData.computeIfAbsent(key, k -> new String[inputFiles.length]);
+                        values[fileIndex] = metricValue;
+                    }
+                }
+            }
+        }
+        
+        // Write merged data to output file
+        try (PrintWriter writer = new PrintWriter(new BufferedWriter(new FileWriter(outputFile)))) {
+            // Write header
+            writer.println("Node_Name,DB_Server_Name,Metric_Value1,Metric_Value2,Metric_Value3,Metric_Value4");
+            
+            // Write data
+            for (Map.Entry<NodeKey, String[]> entry : mergedData.entrySet()) {
+                NodeKey key = entry.getKey();
+                String[] values = entry.getValue();
+                
+                StringBuilder line = new StringBuilder();
+                line.append(escapeCsvValue(key.nodeName)).append(",");
+                line.append(escapeCsvValue(key.dbServerName));
+                
+                for (String value : values) {
+                    line.append(",").append(value != null ? escapeCsvValue(value) : "");
+                }
+                
+                writer.println(line);
+            }
+        }
+    }
+    
+    private static String[] splitCSVLine(String line) {
+        List<String> result = new ArrayList<>();
+        boolean inQuotes = false;
+        StringBuilder currentValue = new StringBuilder();
+        
+        for (char c : line.toCharArray()) {
+            if (c == '"') {
+                inQuotes = !inQuotes;
+            } else if (c == ',' && !inQuotes) {
+                result.add(currentValue.toString().trim().replaceAll("^\"|\"$", ""));
+                currentValue.setLength(0);
+            } else {
+                currentValue.append(c);
+            }
+        }
+        result.add(currentValue.toString().trim().replaceAll("^\"|\"$", ""));
+        
+        return result.toArray(new String[0]);
+    }
+    
+    private static String escapeCsvValue(String value) {
+        if (value == null) return "";
+        if (value.contains(",") || value.contains("\"") || value.contains("\n")) {
+            return "\"" + value.replace("\"", "\"\"") + "\"";
+        }
+        return value;
+    }
+}
